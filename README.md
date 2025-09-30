@@ -60,5 +60,6 @@ Options:
                                   [default: False]
   --chapter-subdir                Save raw images in sub directory by chapter
                                   [default: False]
+  --json, -j                      Output JSON metadata of downloaded chapters
   --help                          Show this message and exit.
 ```
