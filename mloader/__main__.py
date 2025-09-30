@@ -13,8 +13,7 @@ from mloader.loader import MangaLoader
 
 log = logging.getLogger()
 
-
-def setup_logging():
+def setup_logging(json_output: bool = False):
     for logger in ("requests", "urllib3"):
         logging.getLogger(logger).setLevel(logging.WARNING)
     handlers = [logging.StreamHandler(sys.stdout)]
@@ -26,12 +25,8 @@ def setup_logging():
         ),
         style="{",
         datefmt="%d.%m.%Y %H:%M:%S",
-        level=logging.INFO,
+        level=logging.INFO if not json_output else logging.CRITICAL,
     )
-
-
-setup_logging()
-
 
 def validate_urls(ctx: click.Context, param, value):
     if not value:
@@ -50,7 +45,6 @@ def validate_urls(ctx: click.Context, param, value):
     ctx.params.setdefault("titles", set()).update(res["titles"])
     ctx.params.setdefault("chapters", set()).update(res["viewer"])
 
-
 def validate_ids(ctx: click.Context, param, value):
     if not value:
         return value
@@ -58,7 +52,6 @@ def validate_ids(ctx: click.Context, param, value):
     assert param.name in ("chapter", "title")
 
     ctx.params.setdefault(f"{param.name}s", set()).update(value)
-
 
 EPILOG = f"""
 Examples:
@@ -79,7 +72,6 @@ Examples:
     $ mloader https://mangaplus.shueisha.co.jp/viewer/1
     https://mangaplus.shueisha.co.jp/titles/2 -r -q low
 """
-
 
 @click.command(
     help=about.__description__,
@@ -209,12 +201,17 @@ def main(
     chapters: Optional[Set[int]] = None,
     titles: Optional[Set[int]] = None,
 ):
-    click.echo(click.style(about.__doc__, fg="blue"))
+    if not json_output:
+        click.echo(click.style(about.__doc__, fg="blue"))
     if not any((chapters, titles)):
         click.echo(ctx.get_help())
         return
     end = end or float("inf")
-    log.info("Started export")
+
+    setup_logging(json_output)
+
+    if not json_output:
+        log.info("Started export")
 
     exporter = RawExporter if raw else CBZExporter
     exporter = partial(
@@ -238,16 +235,14 @@ def main(
         # If JSON output is requested, print the metadata after download
         if json_output:
             result = {"status": "success", "chapters": downloaded_metadata}
-            print("\n" + "=" * 60)
             print(json.dumps(result, indent=4, ensure_ascii=False))
-            print("=" * 60)
+        else:
+            log.info("SUCCESS")
     except Exception:
         log.exception("Failed to download manga")
         if json_output:
             error_json = {"status": "error", "chapters": []}
-            print("\n" + json.dumps(error_json, indent=4))
-    log.info("SUCCESS")
-
+            print(json.dumps(error_json, indent=4))
 
 if __name__ == "__main__":
     main(prog_name=about.__title__)

@@ -22,6 +22,7 @@ log = logging.getLogger()
 
 MangaList = Dict[int, Set[int]]  # Title ID: Set[Chapter ID]
 
+
 class MangaLoader:
     def __init__(
         self,
@@ -128,7 +129,9 @@ class MangaLoader:
 
         return mangas
 
-    def _download(self, manga_list: MangaList, return_metadata: bool = False) -> List[dict]:
+    def _download(
+        self, manga_list: MangaList, return_metadata: bool = False
+    ) -> List[dict]:
         """
         Download manga chapters and optionally return metadata.
 
@@ -142,11 +145,15 @@ class MangaLoader:
         downloaded_chapters = []  # NEW: Track downloaded chapters
         manga_num = len(manga_list)
 
-        for title_index, (title_id, chapters) in enumerate(manga_list.items(), 1):
+        for title_index, (title_id, chapters) in enumerate(
+            manga_list.items(), 1
+        ):
             title = self._get_title_details(title_id).title
             title_name = title.name
-            log.info(f"{title_index}/{manga_num}) Manga: {title_name}")
-            log.info("    Author: %s", title.author)
+
+            if not return_metadata:
+                log.info(f"{title_index}/{manga_num}) Manga: {title_name}")
+                log.info("    Author: %s", title.author)
 
             chapter_num = len(chapters)
             for chapter_index, chapter_id in enumerate(sorted(chapters), 1):
@@ -157,18 +164,23 @@ class MangaLoader:
                     next_chapter if next_chapter.chapter_id != 0 else None
                 )
                 chapter_name = viewer.chapter_name
-                log.info(
-                    f"    {chapter_index}/{chapter_num}) "
-                    f"Chapter {chapter_name}: {chapter.sub_title}"
-                )
+
+                if not return_metadata:
+                    log.info(
+                        f"    {chapter_index}/{chapter_num}) "
+                        f"Chapter {chapter_name}: {chapter.sub_title}"
+                    )
 
                 # NEW: Collect metadata if requested
                 if return_metadata:
                     chapter_info = {
                         "title_name": title_name,
-                        "chapter_no": f"#{chapter_name}",
                         "chapter_id": str(chapter_id),
-                        "chapter_name": f"{chapter_name}: {chapter.sub_title}" if chapter.sub_title else chapter_name
+                        "chapter_name": (
+                            f"{chapter_name}: {chapter.sub_title}"
+                            if chapter.sub_title
+                            else chapter_name
+                        ),
                     }
                     downloaded_chapters.append(chapter_info)
 
@@ -179,11 +191,24 @@ class MangaLoader:
                     p.manga_page for p in viewer.pages if p.manga_page.image_url
                 ]
 
-                with click.progressbar(
-                    pages, label=chapter_name, show_pos=True
-                ) as pbar:
+                if not return_metadata:
+                    with click.progressbar(
+                        pages, label=chapter_name, show_pos=True
+                    ) as pbar:
+                        page_counter = count()
+                        for page_index, page in zip(page_counter, pbar):
+                            if PageType(page.type) == PageType.double:
+                                page_index = range(
+                                    page_index, next(page_counter)
+                                )
+                            if not exporter.skip_image(page_index):
+                                image_blob = self._decrypt_image(
+                                    page.image_url, page.encryption_key
+                                )
+                                exporter.add_image(image_blob, page_index)
+                else:
                     page_counter = count()
-                    for page_index, page in zip(page_counter, pbar):
+                    for page_index, page in zip(page_counter, pages):
                         if PageType(page.type) == PageType.double:
                             page_index = range(page_index, next(page_counter))
                         if not exporter.skip_image(page_index):
