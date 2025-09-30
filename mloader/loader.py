@@ -2,7 +2,8 @@ import logging
 from collections import namedtuple
 from functools import lru_cache
 from itertools import chain, count
-from typing import Union, Dict, Set, Collection, Optional, Callable, List
+from typing import Union, Dict, Set, Collection, Optional, Callable, List, ContextManager
+from contextlib import contextmanager
 
 import click
 from requests import Session
@@ -22,6 +23,23 @@ log = logging.getLogger()
 
 MangaList = Dict[int, Set[int]]  # Title ID: Set[Chapter ID]
 
+@contextmanager
+def json_output_context(json_output: bool) -> ContextManager[None]:
+    """
+    Context manager to handle JSON output.
+
+    Args:
+        json_output: If True, suppress logging output and banner.
+    """
+    if json_output:
+        # Suppress logging output
+        logging.disable(logging.CRITICAL)
+    try:
+        yield
+    finally:
+        if json_output:
+            # Re-enable logging output
+            logging.disable(logging.NOTSET)
 
 class MangaLoader:
     def __init__(
@@ -129,9 +147,7 @@ class MangaLoader:
 
         return mangas
 
-    def _download(
-        self, manga_list: MangaList, return_metadata: bool = False
-    ) -> List[dict]:
+    def _download(self, manga_list: MangaList, return_metadata: bool = False) -> List[dict]:
         """
         Download manga chapters and optionally return metadata.
 
@@ -145,9 +161,7 @@ class MangaLoader:
         downloaded_chapters = []  # NEW: Track downloaded chapters
         manga_num = len(manga_list)
 
-        for title_index, (title_id, chapters) in enumerate(
-            manga_list.items(), 1
-        ):
+        for title_index, (title_id, chapters) in enumerate(manga_list.items(), 1):
             title = self._get_title_details(title_id).title
             title_name = title.name
 
@@ -176,11 +190,7 @@ class MangaLoader:
                     chapter_info = {
                         "title_name": title_name,
                         "chapter_id": str(chapter_id),
-                        "chapter_name": (
-                            f"{chapter_name}: {chapter.sub_title}"
-                            if chapter.sub_title
-                            else chapter_name
-                        ),
+                        "chapter_name": f"{chapter_name}: {chapter.sub_title}" if chapter.sub_title else chapter_name
                     }
                     downloaded_chapters.append(chapter_info)
 
@@ -198,9 +208,7 @@ class MangaLoader:
                         page_counter = count()
                         for page_index, page in zip(page_counter, pbar):
                             if PageType(page.type) == PageType.double:
-                                page_index = range(
-                                    page_index, next(page_counter)
-                                )
+                                page_index = range(page_index, next(page_counter))
                             if not exporter.skip_image(page_index):
                                 image_blob = self._decrypt_image(
                                     page.image_url, page.encryption_key

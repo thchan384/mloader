@@ -9,11 +9,12 @@ import click
 
 from mloader import __version__ as about
 from mloader.exporter import RawExporter, CBZExporter
-from mloader.loader import MangaLoader
+from mloader.loader import MangaLoader, json_output_context
 
 log = logging.getLogger()
 
-def setup_logging(json_output: bool = False):
+
+def setup_logging():
     for logger in ("requests", "urllib3"):
         logging.getLogger(logger).setLevel(logging.WARNING)
     handlers = [logging.StreamHandler(sys.stdout)]
@@ -25,8 +26,12 @@ def setup_logging(json_output: bool = False):
         ),
         style="{",
         datefmt="%d.%m.%Y %H:%M:%S",
-        level=logging.INFO if not json_output else logging.CRITICAL,
+        level=logging.INFO,
     )
+
+
+setup_logging()
+
 
 def validate_urls(ctx: click.Context, param, value):
     if not value:
@@ -45,6 +50,7 @@ def validate_urls(ctx: click.Context, param, value):
     ctx.params.setdefault("titles", set()).update(res["titles"])
     ctx.params.setdefault("chapters", set()).update(res["viewer"])
 
+
 def validate_ids(ctx: click.Context, param, value):
     if not value:
         return value
@@ -52,6 +58,7 @@ def validate_ids(ctx: click.Context, param, value):
     assert param.name in ("chapter", "title")
 
     ctx.params.setdefault(f"{param.name}s", set()).update(value)
+
 
 EPILOG = f"""
 Examples:
@@ -72,6 +79,7 @@ Examples:
     $ mloader https://mangaplus.shueisha.co.jp/viewer/1
     https://mangaplus.shueisha.co.jp/titles/2 -r -q low
 """
+
 
 @click.command(
     help=about.__description__,
@@ -208,41 +216,38 @@ def main(
         return
     end = end or float("inf")
 
-    setup_logging(json_output)
-
-    if not json_output:
-        log.info("Started export")
-
-    exporter = RawExporter if raw else CBZExporter
-    exporter = partial(
-        exporter,
-        destination=out_dir,
-        add_chapter_title=chapter_title,
-        add_chapter_subdir=chapter_subdir,
-    )
-
-    loader = MangaLoader(exporter, quality, split)
-    try:
-        downloaded_metadata = loader.download(
-            title_ids=titles,
-            chapter_ids=chapters,
-            min_chapter=begin,
-            max_chapter=end,
-            last_chapter=last,
-            return_metadata=json_output,  # Pass the flag
+    with json_output_context(json_output):
+        exporter = RawExporter if raw else CBZExporter
+        exporter = partial(
+            exporter,
+            destination=out_dir,
+            add_chapter_title=chapter_title,
+            add_chapter_subdir=chapter_subdir,
         )
 
-        # If JSON output is requested, print the metadata after download
-        if json_output:
-            result = {"status": "success", "chapters": downloaded_metadata}
-            print(json.dumps(result, indent=4, ensure_ascii=False))
-        else:
-            log.info("SUCCESS")
-    except Exception:
-        log.exception("Failed to download manga")
-        if json_output:
-            error_json = {"status": "error", "chapters": []}
-            print(json.dumps(error_json, indent=4))
+        loader = MangaLoader(exporter, quality, split)
+        try:
+            downloaded_metadata = loader.download(
+                title_ids=titles,
+                chapter_ids=chapters,
+                min_chapter=begin,
+                max_chapter=end,
+                last_chapter=last,
+                return_metadata=json_output,  # Pass the flag
+            )
+
+            # If JSON output is requested, print the metadata after download
+            if json_output:
+                result = {"status": "success", "chapters": downloaded_metadata}
+                print(json.dumps(result, indent=4, ensure_ascii=False))
+            else:
+                log.info("SUCCESS")
+        except Exception:
+            log.exception("Failed to download manga")
+            if json_output:
+                error_json = {"status": "error", "chapters": []}
+                print(json.dumps(error_json, indent=4))
+
 
 if __name__ == "__main__":
     main(prog_name=about.__title__)
