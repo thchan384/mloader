@@ -1,6 +1,7 @@
 import logging
 import re
 import sys
+import json
 from functools import partial
 from typing import Optional, Set
 
@@ -75,7 +76,7 @@ Examples:
 'title 2 (can be two different manga) in low quality and save as '
 'separate images', fg="green")}
 
-    $ mloader https://mangaplus.shueisha.co.jp/viewer/1 
+    $ mloader https://mangaplus.shueisha.co.jp/viewer/1
     https://mangaplus.shueisha.co.jp/titles/2 -r -q low
 """
 
@@ -182,6 +183,15 @@ Examples:
     show_default=True,
     help="Save raw images in sub directory by chapter",
 )
+@click.option(
+    "--json",
+    "-j",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Output JSON metadata of downloaded chapters after download completes",
+)
 @click.argument("urls", nargs=-1, callback=validate_urls, expose_value=False)
 @click.pass_context
 def main(
@@ -195,6 +205,7 @@ def main(
     last: bool,
     chapter_title: bool,
     chapter_subdir: bool,
+    json_output: bool,  # Add this parameter
     chapters: Optional[Set[int]] = None,
     titles: Optional[Set[int]] = None,
 ):
@@ -215,15 +226,26 @@ def main(
 
     loader = MangaLoader(exporter, quality, split)
     try:
-        loader.download(
+        downloaded_metadata = loader.download(
             title_ids=titles,
             chapter_ids=chapters,
             min_chapter=begin,
             max_chapter=end,
             last_chapter=last,
+            return_metadata=json_output,  # Pass the flag
         )
+
+        # If JSON output is requested, print the metadata after download
+        if json_output:
+            result = {"status": "success", "chapters": downloaded_metadata}
+            print("\n" + "=" * 60)
+            print(json.dumps(result, indent=4, ensure_ascii=False))
+            print("=" * 60)
     except Exception:
         log.exception("Failed to download manga")
+        if json_output:
+            error_json = {"status": "error", "chapters": []}
+            print("\n" + json.dumps(error_json, indent=4))
     log.info("SUCCESS")
 
 

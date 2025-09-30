@@ -2,7 +2,7 @@ import logging
 from collections import namedtuple
 from functools import lru_cache
 from itertools import chain, count
-from typing import Union, Dict, Set, Collection, Optional, Callable
+from typing import Union, Dict, Set, Collection, Optional, Callable, List
 
 import click
 from requests import Session
@@ -21,7 +21,6 @@ from mloader.utils import chapter_name_to_int
 log = logging.getLogger()
 
 MangaList = Dict[int, Set[int]]  # Title ID: Set[Chapter ID]
-
 
 class MangaLoader:
     def __init__(
@@ -129,13 +128,22 @@ class MangaLoader:
 
         return mangas
 
-    def _download(self, manga_list: MangaList):
-        manga_num = len(manga_list)
-        for title_index, (title_id, chapters) in enumerate(
-            manga_list.items(), 1
-        ):
-            title = self._get_title_details(title_id).title
+    def _download(self, manga_list: MangaList, return_metadata: bool = False) -> List[dict]:
+        """
+        Download manga chapters and optionally return metadata.
 
+        Args:
+            manga_list: Dictionary mapping title IDs to sets of chapter IDs
+            return_meta If True, collect and return metadata for each downloaded chapter
+
+        Returns:
+            List of chapter metadata dicts if return_metadata=True, empty list otherwise
+        """
+        downloaded_chapters = []  # NEW: Track downloaded chapters
+        manga_num = len(manga_list)
+
+        for title_index, (title_id, chapters) in enumerate(manga_list.items(), 1):
+            title = self._get_title_details(title_id).title
             title_name = title.name
             log.info(f"{title_index}/{manga_num}) Manga: {title_name}")
             log.info("    Author: %s", title.author)
@@ -153,6 +161,17 @@ class MangaLoader:
                     f"    {chapter_index}/{chapter_num}) "
                     f"Chapter {chapter_name}: {chapter.sub_title}"
                 )
+
+                # NEW: Collect metadata if requested
+                if return_metadata:
+                    chapter_info = {
+                        "title_name": title_name,
+                        "chapter_no": f"#{chapter_name}",
+                        "chapter_id": str(chapter_id),
+                        "chapter_name": f"{chapter_name}: {chapter.sub_title}" if chapter.sub_title else chapter_name
+                    }
+                    downloaded_chapters.append(chapter_info)
+
                 exporter = self.exporter(
                     title=title, chapter=chapter, next_chapter=next_chapter
                 )
@@ -168,13 +187,13 @@ class MangaLoader:
                         if PageType(page.type) == PageType.double:
                             page_index = range(page_index, next(page_counter))
                         if not exporter.skip_image(page_index):
-                            # Todo use asyncio + async requests 3
                             image_blob = self._decrypt_image(
                                 page.image_url, page.encryption_key
                             )
                             exporter.add_image(image_blob, page_index)
 
                 exporter.close()
+        return downloaded_chapters
 
     def download(
         self,
@@ -184,8 +203,15 @@ class MangaLoader:
         min_chapter: int,
         max_chapter: int,
         last_chapter: bool = False,
-    ):
+        return_metadata: bool = False,  # NEW parameter
+    ) -> List[dict]:  # NEW return type
+        """
+        Download manga chapters.
+
+        Returns:
+            List of chapter metadata dicts if return_metadata=True, empty list otherwise
+        """
         manga_list = self._normalize_ids(
             title_ids, chapter_ids, min_chapter, max_chapter, last_chapter
         )
-        self._download(manga_list)
+        return self._download(manga_list, return_metadata=return_metadata)
