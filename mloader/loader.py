@@ -188,9 +188,11 @@ class MangaLoader:
                 # NEW: Collect metadata if requested
                 if return_metadata:
                     chapter_info = {
+                        "title_id": title_id,
                         "title_name": title_name,
-                        "chapter_id": str(chapter_id),
-                        "chapter_name": f"{chapter_name}: {chapter.sub_title}" if chapter.sub_title else chapter_name
+                        "chapter_id": chapter_id,
+                        "chapter_no": chapter_name,
+                        "chapter_name": f"{chapter.sub_title}" if chapter.sub_title else chapter_name
                     }
                     downloaded_chapters.append(chapter_info)
 
