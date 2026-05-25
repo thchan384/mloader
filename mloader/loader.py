@@ -4,6 +4,8 @@ from functools import lru_cache
 from itertools import chain, count
 from typing import Union, Dict, Set, Collection, Optional, Callable
 import uuid
+from curl_adapter import CurlCffiAdapter
+import os
 
 import click
 from requests import Session
@@ -17,7 +19,7 @@ from mloader.response_pb2 import (
     Chapter,
     Title,
 )
-from mloader.utils import chapter_name_to_int
+from mloader.utils import CustomSession, chapter_name_to_int
 
 log = logging.getLogger()
 
@@ -34,12 +36,13 @@ class MangaLoader:
         self.exporter = exporter
         self.quality = quality
         self.split = split
-        self._api_url = "https://jumpg-webapi.tokyo-cdn.com"
-        self.session = Session()
+        self._api_url = os.getenv("MANGAPLUS_URL") or "https://jumpg-webapi.tokyo-cdn.com"
+        session = CustomSession()
+        session.mount("http://", CurlCffiAdapter())
+        session.mount("https://", CurlCffiAdapter())
+        self.session = session
         self.session.headers.update(
             {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
-                "rv:72.0) Gecko/20100101 Firefox/72.0",
                 "Session-Token": str(uuid.uuid1())
             }
         )
