@@ -1,5 +1,6 @@
 import logging
 from collections import namedtuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from itertools import chain, count
 from typing import Union, Dict, Set, Collection, Optional, Callable
@@ -24,6 +25,15 @@ from mloader.utils import CustomSession, chapter_name_to_int
 log = logging.getLogger()
 
 MangaList = Dict[int, Set[int]]  # Title ID: Set[Chapter ID]
+
+try:
+    WORKERS = int(os.getenv("MAX_WORKERS", 8))
+except (TypeError, ValueError):
+    log.warning("Invalid worker count, reverting to default (8)")
+    WORKERS = 8
+if WORKERS < 1 or WORKERS > 8:
+    log.warning("Invalid worker count, reverting to default (8)")
+    WORKERS = 8
 
 
 class MangaLoader:
@@ -166,18 +176,57 @@ class MangaLoader:
                 ]
 
                 with click.progressbar(
-                    pages, label=chapter_name, show_pos=True
+                    length=len(pages), label=chapter_name, show_pos=True
                 ) as pbar:
                     page_counter = count()
-                    for page_index, page in zip(page_counter, pbar):
-                        if PageType(page.type) == PageType.double:
-                            page_index = range(page_index, next(page_counter))
-                        if not exporter.skip_image(page_index):
-                            # Todo use asyncio + async requests 3
-                            image_blob = self._decrypt_image(
-                                page.image_url, page.encryption_key
+                    futures = {}
+                    completed_images = {}
+                    next_to_write = 0
+
+                    with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+                        for page_number, (page_index, page) in enumerate(
+                            zip(page_counter, pages)
+                        ):
+                            if PageType(page.type) == PageType.double:
+                                page_index = range(page_index, next(page_counter))
+
+                            if exporter.skip_image(page_index):
+                                completed_images[page_number] = None
+                                pbar.update(1)
+
+                                while next_to_write in completed_images:
+                                    completed_image = completed_images.pop(
+                                        next_to_write
+                                    )
+                                    if completed_image is not None:
+                                        image_index, image_blob = completed_image
+                                        exporter.add_image(image_blob, image_index)
+                                    next_to_write += 1
+                                continue
+
+                            future = executor.submit(
+                                self._decrypt_image,
+                                page.image_url,
+                                page.encryption_key,
                             )
-                            exporter.add_image(image_blob, page_index)
+                            futures[future] = (page_number, page_index)
+
+                        for future in as_completed(futures):
+                            page_number, page_index = futures[future]
+                            completed_images[page_number] = (
+                                page_index,
+                                future.result(),
+                            )
+                            pbar.update(1)
+
+                            while next_to_write in completed_images:
+                                completed_image = completed_images.pop(
+                                    next_to_write
+                                )
+                                if completed_image is not None:
+                                    image_index, image_blob = completed_image
+                                    exporter.add_image(image_blob, image_index)
+                                next_to_write += 1
 
                 exporter.close()
 

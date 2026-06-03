@@ -4,6 +4,10 @@ import sys
 from typing import Optional
 import requests
 import time
+import logging
+
+log = logging.getLogger()
+
 
 class CustomSession(requests.Session):
     def __init__(
@@ -39,7 +43,9 @@ class CustomSession(requests.Session):
                 return response
 
             response.close()
-            time.sleep(max(4, self.min_backoff * (2**attempt)))
+            sleep_time = max(4, self.min_backoff * (2**attempt))
+            log.info(f"Received status code: {response.status_code}, sleeping for {sleep_time}s")
+            time.sleep(sleep_time)
 
         if last_exception is not None:
             raise last_exception
