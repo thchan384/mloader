@@ -1,7 +1,7 @@
-import json
 import logging
 import re
 import sys
+import json
 from functools import partial
 from typing import Optional, Set
 
@@ -76,7 +76,7 @@ Examples:
 'title 2 (can be two different manga) in low quality and save as '
 'separate images', fg="green")}
 
-    $ mloader https://mangaplus.shueisha.co.jp/viewer/1 
+    $ mloader https://mangaplus.shueisha.co.jp/viewer/1
     https://mangaplus.shueisha.co.jp/titles/2 -r -q low
 """
 
@@ -205,7 +205,7 @@ def main(
     last: bool,
     chapter_title: bool,
     chapter_subdir: bool,
-    json_output: bool,
+    json_output: bool,  # Add this parameter
     chapters: Optional[Set[int]] = None,
     titles: Optional[Set[int]] = None,
 ):
@@ -233,9 +233,10 @@ def main(
                 min_chapter=begin,
                 max_chapter=end,
                 last_chapter=last,
-                return_metadata=json_output,
+                return_metadata=json_output,  # Pass the flag
             )
 
+            # If JSON output is requested, print the metadata after download
             if json_output:
                 result = {"status": "success", "chapters": downloaded_metadata}
                 print(json.dumps(result, indent=4, ensure_ascii=False))
