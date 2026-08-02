@@ -2,6 +2,54 @@ import re
 import string
 import sys
 from typing import Optional
+import requests
+import time
+import logging
+
+log = logging.getLogger()
+
+
+class CustomSession(requests.Session):
+    def __init__(
+        self,
+        max_retries: int = 3,
+        min_backoff: int = 4,
+        timeout: int = 10,
+    ) -> None:
+        super().__init__()
+        self.max_retries = max_retries
+        self.min_backoff = min_backoff
+        self.timeout = timeout
+
+    def request(self, method: str | bytes, url: str | bytes, **kwargs: ...) -> ...:  # pyright: ignore[reportIncompatibleMethodOverride]
+        kwargs.setdefault("timeout", self.timeout)
+        last_exception = None
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = super().request(method, url, **kwargs)
+            except requests.RequestException as exc:
+                last_exception = exc
+                if attempt == self.max_retries:
+                    raise
+
+                time.sleep(max(4, self.min_backoff * (2**attempt)))
+                continue
+
+            if response.status_code != 429 and response.status_code < 500:
+                return response
+
+            if attempt == self.max_retries:
+                return response
+
+            response.close()
+            sleep_time = max(4, self.min_backoff * (2**attempt))
+            log.info(f"Received status code: {response.status_code}, sleeping for {sleep_time}s")
+            time.sleep(sleep_time)
+
+        if last_exception is not None:
+            raise last_exception
+        raise RuntimeError("unreachable")
 
 
 def is_oneshot(chapter_name: str, chapter_subtitle: str) -> bool:

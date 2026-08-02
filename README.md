@@ -1,23 +1,32 @@
 # Mangaplus Downloader
 
-[![Latest Github release](https://img.shields.io/github/tag/hurlenko/mloader.svg)](https://github.com/hurlenko/mloader/releases/latest)
-![Python](https://img.shields.io/badge/python-v3.6+-blue.svg)
+![Python](https://img.shields.io/badge/python-v3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-GPLv3-blue.svg)
 
 ## **mloader** - download manga from mangaplus.shueisha.co.jp
+
+Working fork of https://github.com/hurlenko/mloader/ with some [modifications](#-improvements), with future-proofing and performance in mind
 
 ## 🚩 Table of Contents
 
 - [Installation](#-installation)
 - [Usage](#-usage)
 - [Command line interface](#%EF%B8%8F-command-line-interface)
+- [Future-Proofing](#future-proofing)
 
 ## 💾 Installation
 
-The recommended installation method is using `pip`:
+The recommended installation method is using `uv`:
 
 ```bash
-pip install mloader
+uv tool install git+https://github.com/infernalsaber/mloader.git
+```
+
+
+If you prefer `pip`, you can still install it directly:
+
+```bash
+pip install git+https://github.com/infernalsaber/mloader.git
 ```
 
 After installation, the `mloader` command will be available. Check the [command line](%EF%B8%8F-command-line-interface) section for supported commands.
@@ -63,3 +72,10 @@ Options:
   --json, -j                      Output JSON metadata of downloaded chapters
   --help                          Show this message and exit.
 ```
+
+## 🔧 Improvements
+
+- Generates `Session-Token` for MangaPlus access
+- Mimics a browser's TLS fingerprint for future-proofing
+- Uses multiple workers for faster downloads
+- Overwritable configs incase of site changes
