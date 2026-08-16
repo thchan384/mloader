@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from itertools import chain, count
 from typing import Union, Dict, Set, Collection, Optional, Callable, List, ContextManager
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import uuid
 import os
 
@@ -235,9 +235,19 @@ class MangaLoader:
                     p.manga_page for p in viewer.pages if p.manga_page.image_url
                 ]
 
-                with click.progressbar(
-                    length=len(pages), label=chapter_name, show_pos=True
-                ) as pbar:
+                # Skip progressbar in JSON mode for clean output
+                if return_metadata:
+                    # Create a dummy progress bar that does nothing
+                    class DummyPbar:
+                        def update(self, *args, **kwargs): pass
+                        def __enter__(self): return self
+                        def __exit__(self, *args, **kwargs): pass
+                    pbar = DummyPbar()
+                else:
+                    pbar = click.progressbar(
+                        length=len(pages), label=chapter_name, show_pos=True
+                    )
+                with pbar:
                     page_counter = count()
                     futures = {}
                     completed_images = {}

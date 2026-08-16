@@ -210,10 +210,14 @@ def main(
     chapters: Optional[Set[int]] = None,
     titles: Optional[Set[int]] = None,
 ):
-    if not json_output:
+    if json_output:
+        # In JSON mode, suppress all non-JSON output
+        pass
+    else:
         click.echo(click.style(about.__doc__, fg="blue"))
     if not any((chapters, titles)):
-        click.echo(ctx.get_help())
+        if not json_output:
+            click.echo(ctx.get_help())
         return
     end = end or float("inf")
 
@@ -242,11 +246,11 @@ def main(
                 print(json.dumps(result, indent=4, ensure_ascii=False))
             else:
                 log.info("SUCCESS")
-        except Exception:
+        except Exception as e:
             log.exception("Failed to download manga")
             if json_output:
-                error_json = {"status": "error", "chapters": []}
-                print(json.dumps(error_json, indent=4))
+                error_json = {"status": "error", "message": str(e), "chapters": []}
+                print(json.dumps(error_json, indent=4, ensure_ascii=False))
 
 
 if __name__ == "__main__":
